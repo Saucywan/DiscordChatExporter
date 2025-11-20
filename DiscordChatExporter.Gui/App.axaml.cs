@@ -36,6 +36,7 @@ public class App : Application, IDisposable
         services.AddSingleton<ViewModelManager>();
 
         // Services
+        services.AddSingleton<DebugLogService>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<UpdateService>();
 

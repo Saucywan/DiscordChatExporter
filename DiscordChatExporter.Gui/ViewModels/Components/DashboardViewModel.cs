@@ -27,6 +27,7 @@ public partial class DashboardViewModel : ViewModelBase
     private readonly ViewModelManager _viewModelManager;
     private readonly SnackbarManager _snackbarManager;
     private readonly DialogManager _dialogManager;
+    private readonly DebugLogService _debugLogService;
     private readonly SettingsService _settingsService;
 
     private readonly DisposableCollector _eventRoot = new();
@@ -38,12 +39,14 @@ public partial class DashboardViewModel : ViewModelBase
         ViewModelManager viewModelManager,
         DialogManager dialogManager,
         SnackbarManager snackbarManager,
+        DebugLogService debugLogService,
         SettingsService settingsService
     )
     {
         _viewModelManager = viewModelManager;
         _dialogManager = dialogManager;
         _snackbarManager = snackbarManager;
+        _debugLogService = debugLogService;
         _settingsService = settingsService;
 
         _progressMuxer = Progress.CreateMuxer().WithAutoReset();
@@ -115,6 +118,8 @@ public partial class DashboardViewModel : ViewModelBase
 
         try
         {
+            await _debugLogService.LogAsync("Pulling guild list...");
+
             var token = Token?.Trim('"', ' ');
             if (string.IsNullOrWhiteSpace(token))
                 return;
@@ -129,6 +134,8 @@ public partial class DashboardViewModel : ViewModelBase
 
             var guilds = await _discord.GetUserGuildsAsync();
 
+            await _debugLogService.LogAsync($"Retrieved {guilds.Count} guild(s) for the user.");
+
             AvailableGuilds = guilds;
             SelectedGuild = guilds.FirstOrDefault();
 
@@ -137,6 +144,7 @@ public partial class DashboardViewModel : ViewModelBase
         catch (DiscordChatExporterException ex) when (!ex.IsFatal)
         {
             _snackbarManager.Notify(ex.Message.TrimEnd('.'));
+            await _debugLogService.LogExceptionAsync(ex, "Non-fatal error while pulling guilds");
         }
         catch (Exception ex)
         {
@@ -146,6 +154,8 @@ public partial class DashboardViewModel : ViewModelBase
             );
 
             await _dialogManager.ShowDialogAsync(dialog);
+
+            await _debugLogService.LogExceptionAsync(ex, "Fatal error while pulling guilds");
         }
         finally
         {
@@ -167,6 +177,10 @@ public partial class DashboardViewModel : ViewModelBase
             if (_discord is null || SelectedGuild is null)
                 return;
 
+            await _debugLogService.LogAsync(
+                $"Pulling channels for guild {SelectedGuild.Id} ({SelectedGuild.Name}) with thread inclusion mode {_settingsService.ThreadInclusionMode}."
+            );
+
             AvailableChannels = null;
             SelectedChannels.Clear();
 
@@ -175,6 +189,9 @@ public partial class DashboardViewModel : ViewModelBase
             // Regular channels
             await foreach (var channel in _discord.GetGuildChannelsAsync(SelectedGuild.Id))
                 channels.Add(channel);
+
+            var baseChannelCount = channels.Count;
+            var threadCount = 0;
 
             // Threads
             if (_settingsService.ThreadInclusionMode != ThreadInclusionMode.None)
@@ -187,15 +204,20 @@ public partial class DashboardViewModel : ViewModelBase
                 )
                 {
                     channels.Add(thread);
+                    threadCount++;
                 }
             }
 
             // Build a hierarchy of channels
             var channelTree = ChannelConnection.BuildTree(
                 channels
-                    .OrderByDescending(c => c.IsDirect ? c.LastMessageId : null)
-                    .ThenBy(c => c.Position)
-                    .ToArray()
+                .OrderByDescending(c => c.IsDirect ? c.LastMessageId : null)
+                .ThenBy(c => c.Position)
+                .ToArray()
+            );
+
+            await _debugLogService.LogAsync(
+                $"Loaded {baseChannelCount} base channel(s), {threadCount} thread(s), and {channels.Count(c => c.Kind == ChannelKind.GuildForum)} forum parent(s) for guild {SelectedGuild.Id} ({SelectedGuild.Name})."
             );
 
             AvailableChannels = channelTree;
@@ -204,6 +226,7 @@ public partial class DashboardViewModel : ViewModelBase
         catch (DiscordChatExporterException ex) when (!ex.IsFatal)
         {
             _snackbarManager.Notify(ex.Message.TrimEnd('.'));
+            await _debugLogService.LogExceptionAsync(ex, "Non-fatal error while pulling channels");
         }
         catch (Exception ex)
         {
@@ -213,6 +236,8 @@ public partial class DashboardViewModel : ViewModelBase
             );
 
             await _dialogManager.ShowDialogAsync(dialog);
+
+            await _debugLogService.LogExceptionAsync(ex, "Fatal error while pulling channels");
         }
         finally
         {
@@ -246,12 +271,20 @@ public partial class DashboardViewModel : ViewModelBase
 
             var channels = dialog.Channels!.ToList();
 
+            await _debugLogService.LogAsync(
+                $"Export requested for guild {dialog.Guild!.Id} ({dialog.Guild!.Name}) with {channels.Count} selected channel(s). After={dialog.After?.ToString("O") ?? "<none>"}, Before={dialog.Before?.ToString("O") ?? "<none>"}."
+            );
+
             var forumChannels = channels
                 .Where(channel => channel.Kind == ChannelKind.GuildForum)
                 .ToArray();
 
             if (forumChannels.Any())
             {
+                await _debugLogService.LogAsync(
+                    $"Forum parents selected for export: {string.Join(", ", forumChannels.Select(f => $"{f.Name} ({f.Id})"))}"
+                );
+
                 var fetchedThreads = new List<Channel>();
 
                 await foreach (
@@ -265,6 +298,10 @@ public partial class DashboardViewModel : ViewModelBase
                 {
                     fetchedThreads.Add(thread);
                 }
+
+                await _debugLogService.LogAsync(
+                    $"Fetched {fetchedThreads.Count} thread(s) across {forumChannels.Length} forum channel(s): {string.Join("; ", fetchedThreads.Select(t => $"{t.Name} ({t.Id}) parent {t.Parent?.Id}"))}"
+                );
 
                 channels.AddRange(fetchedThreads);
                 channels.RemoveAll(channel => channel.Kind == ChannelKind.GuildForum);
@@ -289,6 +326,10 @@ public partial class DashboardViewModel : ViewModelBase
 
                     try
                     {
+                        await _debugLogService.LogAsync(
+                            $"Starting export for channel {channel.Name} ({channel.Id}) of kind {channel.Kind}."
+                        );
+
                         var request = new ExportRequest(
                             dialog.Guild!,
                             channel,
@@ -309,14 +350,26 @@ public partial class DashboardViewModel : ViewModelBase
                         await exporter.ExportChannelAsync(request, progress, cancellationToken);
 
                         Interlocked.Increment(ref successfulExportCount);
+
+                        await _debugLogService.LogAsync(
+                            $"Completed export for channel {channel.Name} ({channel.Id})."
+                        );
                     }
                     catch (ChannelEmptyException ex)
                     {
                         _snackbarManager.Notify(ex.Message.TrimEnd('.'));
+                        await _debugLogService.LogExceptionAsync(
+                            ex,
+                            $"Channel {channel.Id} was empty during export"
+                        );
                     }
                     catch (DiscordChatExporterException ex) when (!ex.IsFatal)
                     {
                         _snackbarManager.Notify(ex.Message.TrimEnd('.'));
+                        await _debugLogService.LogExceptionAsync(
+                            ex,
+                            $"Non-fatal export error for channel {channel.Id}"
+                        );
                     }
                     finally
                     {
