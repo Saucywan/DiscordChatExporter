@@ -244,8 +244,34 @@ public partial class DashboardViewModel : ViewModelBase
 
             var exporter = new ChannelExporter(_discord);
 
-            var channelProgressPairs = dialog
-                .Channels!.Select(c => new { Channel = c, Progress = _progressMuxer.CreateInput() })
+            var channels = dialog.Channels!.ToList();
+
+            var forumChannels = channels
+                .Where(channel => channel.Kind == ChannelKind.GuildForum)
+                .ToArray();
+
+            if (forumChannels.Any())
+            {
+                var fetchedThreads = new List<Channel>();
+
+                await foreach (
+                    var thread in _discord.GetChannelThreadsAsync(
+                        forumChannels,
+                        true,
+                        dialog.After?.Pipe(Snowflake.FromDate),
+                        dialog.Before?.Pipe(Snowflake.FromDate)
+                    )
+                )
+                {
+                    fetchedThreads.Add(thread);
+                }
+
+                channels.AddRange(fetchedThreads);
+                channels.RemoveAll(channel => channel.Kind == ChannelKind.GuildForum);
+            }
+
+            var channelProgressPairs = channels
+                .Select(c => new { Channel = c, Progress = _progressMuxer.CreateInput() })
                 .ToArray();
 
             var successfulExportCount = 0;
