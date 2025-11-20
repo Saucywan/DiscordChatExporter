@@ -162,7 +162,9 @@ public abstract class ExportCommandBase : DiscordCommandBase
 
         var unwrappedChannels = new List<Channel>(channels);
 
-        var hasForumChannels = unwrappedChannels.Any(channel => channel.Kind == ChannelKind.GuildForum);
+        var hasForumChannels = unwrappedChannels.Any(channel =>
+            channel.Kind == ChannelKind.GuildForum
+        );
 
         // Unwrap threads
         if (ThreadInclusionMode != ThreadInclusionMode.None || hasForumChannels)
@@ -179,10 +181,12 @@ public abstract class ExportCommandBase : DiscordCommandBase
                         await foreach (
                             var thread in Discord.GetChannelThreadsAsync(
                                 hasForumChannels && ThreadInclusionMode == ThreadInclusionMode.None
-                                    ? channels.Where(c => c.Kind == ChannelKind.GuildForum).ToArray()
+                                    ? channels
+                                        .Where(c => c.Kind == ChannelKind.GuildForum)
+                                        .ToArray()
                                     : channels,
                                 ThreadInclusionMode == ThreadInclusionMode.All
-                                || ThreadInclusionMode == ThreadInclusionMode.None,
+                                    || ThreadInclusionMode == ThreadInclusionMode.None,
                                 Before,
                                 After,
                                 cancellationToken

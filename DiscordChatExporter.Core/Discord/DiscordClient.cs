@@ -408,7 +408,11 @@ public class DiscordClient(
             // for that range, because thread-start event should always be accompanied by a message.
             // Note that we don't perform a similar check for the 'after' boundary, because
             // threads may have messages in range, even if the parent channel doesn't.
-            .Where(c => before is null || c.Kind == ChannelKind.GuildForum || c.MayHaveMessagesBefore(before.Value))
+            .Where(c =>
+                before is null
+                || c.Kind == ChannelKind.GuildForum
+                || c.MayHaveMessagesBefore(before.Value)
+            )
             .ToArray();
 
         // User accounts can only fetch threads using the search endpoint
@@ -548,14 +552,12 @@ public class DiscordClient(
 
     private async ValueTask<Message?> TryGetLastMessageAsync(
         Snowflake channelId,
-        Snowflake? before = null,
         CancellationToken cancellationToken = default
     )
     {
         var url = new UrlBuilder()
             .SetPath($"channels/{channelId}/messages")
             .SetQueryParameter("limit", "1")
-            .SetQueryParameter("before", before?.ToString())
             .Build();
 
         var response = await GetJsonResponseAsync(url, cancellationToken);
@@ -574,7 +576,7 @@ public class DiscordClient(
         // progress based on the difference between message timestamps.
         // This also snapshots the boundaries, which means that messages posted after
         // the export started will not appear in the output.
-        var lastMessage = await TryGetLastMessageAsync(channelId, before, cancellationToken);
+        var lastMessage = await TryGetLastMessageAsync(channelId, cancellationToken);
         if (lastMessage is null || lastMessage.Timestamp < after?.ToDate())
             yield break;
 

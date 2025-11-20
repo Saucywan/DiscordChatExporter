@@ -21,8 +21,7 @@ public class DebugLogService : IDisposable
 
     public Task LogAsync(string message) => WriteAsync(message);
 
-    public Task LogExceptionAsync(Exception ex, string context) =>
-        WriteAsync($"{context}: {ex}");
+    public Task LogExceptionAsync(Exception ex, string context) => WriteAsync($"{context}: {ex}");
 
     private async Task WriteAsync(string message)
     {

@@ -211,9 +211,9 @@ public partial class DashboardViewModel : ViewModelBase
             // Build a hierarchy of channels
             var channelTree = ChannelConnection.BuildTree(
                 channels
-                .OrderByDescending(c => c.IsDirect ? c.LastMessageId : null)
-                .ThenBy(c => c.Position)
-                .ToArray()
+                    .OrderByDescending(c => c.IsDirect ? c.LastMessageId : null)
+                    .ThenBy(c => c.Position)
+                    .ToArray()
             );
 
             await _debugLogService.LogAsync(

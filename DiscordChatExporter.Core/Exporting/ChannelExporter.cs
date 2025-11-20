@@ -46,23 +46,23 @@ public class ChannelExporter(DiscordClient discord)
         }
 
         // Check if the 'before' and 'after' boundaries are valid
-        if (
-            (
-                request.Before is not null
-                && !request.Channel.MayHaveMessagesBefore(request.Before.Value)
-            )
-            || (
-                request.After is not null
-                && !request.Channel.MayHaveMessagesAfter(request.After.Value)
-            )
-        )
-        {
-            throw new ChannelEmptyException(
-                $"Channel '{request.Channel.Name}' "
-                    + $"of guild '{request.Guild.Name}' "
-                    + $"does not contain any messages within the specified period; an empty file will be created."
-            );
-        }
+        // if (
+        //     (
+        //         request.Before is not null
+        //         && !request.Channel.MayHaveMessagesBefore(request.Before.Value)
+        //     )
+        //     || (
+        //         request.After is not null
+        //         && !request.Channel.MayHaveMessagesAfter(request.After.Value)
+        //     )
+        // )
+        // {
+        //     throw new ChannelEmptyException(
+        //         $"Channel '{request.Channel.Name}' "
+        //             + $"of guild '{request.Guild.Name}' "
+        //             + $"does not contain any messages within the specified period; an empty file will be created."
+        //     );
+        // }
 
         await foreach (
             var message in discord.GetMessagesAsync(
