@@ -401,13 +401,14 @@ public class DiscordClient(
             .Where(c => !c.IsCategory)
             // Voice channels cannot have threads
             .Where(c => !c.IsVoice)
-            // Empty channels cannot have threads
-            .Where(c => !c.IsEmpty)
+            // Empty channels cannot have threads, unless they are forums (forum messages live in
+            // child threads, so the parent channel can be empty)
+            .Where(c => !c.IsEmpty || c.Kind == ChannelKind.GuildForum)
             // If the 'before' boundary is specified, skip channels that don't have messages
             // for that range, because thread-start event should always be accompanied by a message.
             // Note that we don't perform a similar check for the 'after' boundary, because
             // threads may have messages in range, even if the parent channel doesn't.
-            .Where(c => before is null || c.MayHaveMessagesBefore(before.Value))
+            .Where(c => before is null || c.Kind == ChannelKind.GuildForum || c.MayHaveMessagesBefore(before.Value))
             .ToArray();
 
         // User accounts can only fetch threads using the search endpoint
