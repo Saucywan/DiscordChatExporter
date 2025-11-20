@@ -399,6 +399,8 @@ public class DiscordClient(
         var filteredChannels = channels
             // Categories cannot have threads
             .Where(c => !c.IsCategory)
+            // Threads cannot have threads
+            .Where(c => !c.IsThread)
             // Voice channels cannot have threads
             .Where(c => !c.IsVoice)
             // Empty channels cannot have threads

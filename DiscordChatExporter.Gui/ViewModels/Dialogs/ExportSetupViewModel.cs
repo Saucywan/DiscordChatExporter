@@ -73,7 +73,8 @@ public partial class ExportSetupViewModel(
     [ObservableProperty]
     public partial bool IsAdvancedSectionDisplayed { get; set; }
 
-    public bool IsSingleChannel => Channels?.Count == 1;
+    public bool IsSingleChannel =>
+        Channels?.Count == 1 && Channels[0].Kind != ChannelKind.GuildForum;
 
     public IReadOnlyList<ExportFormat> AvailableFormats { get; } = Enum.GetValues<ExportFormat>();
 

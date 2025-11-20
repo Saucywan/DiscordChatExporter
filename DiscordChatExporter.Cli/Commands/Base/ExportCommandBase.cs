@@ -162,6 +162,44 @@ public abstract class ExportCommandBase : DiscordCommandBase
 
         var unwrappedChannels = new List<Channel>(channels);
 
+        // Forum channels cannot be exported directly, so fetch their threads first
+        if (unwrappedChannels.Any(channel => channel.Kind == ChannelKind.GuildForum))
+        {
+            await console.Output.WriteLineAsync("Fetching forum threads...");
+
+            var fetchedThreadsCount = 0;
+            await console
+                .CreateStatusTicker()
+                .StartAsync(
+                    "...",
+                    async ctx =>
+                    {
+                        await foreach (
+                            var thread in Discord.GetChannelThreadsAsync(
+                                unwrappedChannels.Where(channel => channel.Kind == ChannelKind.GuildForum).ToArray(),
+                                true,
+                                Before,
+                                After,
+                                cancellationToken
+                            )
+                        )
+                        {
+                            unwrappedChannels.Add(thread);
+
+                            ctx.Status(Markup.Escape($"Fetched '{thread.GetHierarchicalName()}'."));
+
+                            fetchedThreadsCount++;
+                        }
+                    }
+                );
+
+            // Remove forums, as they cannot be exported directly and their constituent threads
+            // have already been fetched.
+            unwrappedChannels.RemoveAll(channel => channel.Kind == ChannelKind.GuildForum);
+
+            await console.Output.WriteLineAsync($"Fetched {fetchedThreadsCount} forum thread(s).");
+        }
+
         // Unwrap threads
         if (ThreadInclusionMode != ThreadInclusionMode.None)
         {
@@ -176,7 +214,7 @@ public abstract class ExportCommandBase : DiscordCommandBase
                     {
                         await foreach (
                             var thread in Discord.GetChannelThreadsAsync(
-                                channels,
+                                unwrappedChannels,
                                 ThreadInclusionMode == ThreadInclusionMode.All,
                                 Before,
                                 After,
