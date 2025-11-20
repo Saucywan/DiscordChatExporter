@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -305,6 +306,24 @@ public partial class DashboardViewModel : ViewModelBase
 
                 channels.AddRange(fetchedThreads);
                 channels.RemoveAll(channel => channel.Kind == ChannelKind.GuildForum);
+            }
+
+            var isValidOutputPath =
+                channels.Count <= 1
+                || dialog.OutputPath!.Contains('%')
+                || Directory.Exists(dialog.OutputPath)
+                || Path.EndsInDirectorySeparator(dialog.OutputPath);
+
+            if (!isValidOutputPath)
+            {
+                var message =
+                    "Attempted to export multiple channels, but the output path is neither a directory nor a template. "
+                    + "If the provided output path is meant to be treated as a directory, make sure it ends with a slash.";
+
+                _snackbarManager.Notify(message);
+                await _debugLogService.LogAsync(message);
+
+                return;
             }
 
             var channelProgressPairs = channels
